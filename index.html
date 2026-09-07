@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Verum &amp; Mariae — Meta Ads</title>
+<meta name="description" content="Dashboard de performance de mídia (Meta Ads) — Verum e Mariae Couture.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+/* Paleta clássica B16 — mesma dos demais dashboards (Mundial Cromo, AAEMCWEB,
+   Matheus Godinho, Dr. Anderson). 2 slots categóricos (amarelo/azul) validados em
+   claro e escuro. O amarelo fica abaixo de 3:1 no claro de propósito (é a cor da
+   marca), por isso toda barra leva rótulo direto — a leitura nunca depende só da cor. */
+:root{
+  color-scheme: light;
+  --plane:#f4f4f2; --surface:#fff; --surface2:#f9f9f7;
+  --border:#e5e5e0; --border2:#d0d0c8;
+  --yellow:#d4a800; --yellow-bg:#fff9e0;
+  --black:#111; --text:#1a1a1a; --muted:#777;
+  --grid:#e5e5e0; --baseline:#d0d0c8;
+  --cat1:#d4a800; --cat2:#3b82f6;
+  --good:#16a34a; --warn:#e08a00; --critical:#d03b3b;
+  --shadow:0 1px 2px rgba(17,17,17,.04), 0 2px 8px rgba(17,17,17,.05);
+}
+html.dark{
+  color-scheme: dark;
+  --plane:#0d0d0d; --surface:#1a1a1a; --surface2:#222;
+  --border:#2a2a2a; --border2:#333;
+  --yellow:#d4a800; --yellow-bg:rgba(212,168,0,.08);
+  --black:#f0f0f0; --text:#e8e8e8; --muted:#888;
+  --grid:#2a2a2a; --baseline:#333;
+  --cat1:#b08c00; --cat2:#3b82f6;
+  --good:#22c55e; --warn:#fab219; --critical:#e05555;
+  --shadow:0 1px 2px rgba(0,0,0,.3), 0 2px 10px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--plane); color:var(--text);
+  font-family:"DM Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1220px; margin:0 auto; padding:20px 18px 64px}
+
+header.top{
+  display:flex; flex-wrap:wrap; gap:14px; align-items:flex-end; justify-content:space-between;
+  padding:18px 0 16px; border-bottom:1px solid var(--border); margin-bottom:8px;
+}
+.brand-row{display:flex; align-items:center; gap:13px}
+.logo{width:44px; height:44px; border-radius:50%; object-fit:cover; display:block; flex:0 0 44px}
+.brand .kicker{font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); font-weight:500; margin-bottom:4px}
+.brand h1{font-family:"Bebas Neue","DM Sans",sans-serif; font-weight:400; font-size:clamp(30px,4.6vw,44px); line-height:1; letter-spacing:.012em; margin:0; color:var(--black)}
+.brand .sub{color:var(--muted); font-size:13.5px; margin-top:6px}
+.brand .sub b{color:var(--text); font-weight:500}
+.tools{display:flex; flex-wrap:wrap; gap:8px; align-items:center}
+.btn{font:inherit; font-size:13px; color:var(--text); background:var(--surface); border:1px solid var(--border2); border-radius:8px; padding:7px 12px; cursor:pointer; display:inline-flex; align-items:center; gap:6px}
+.btn:hover{background:var(--surface2)}
+.seg{display:inline-flex; background:var(--surface); border:1px solid var(--border2); border-radius:8px; overflow:hidden}
+.seg button{font:inherit; font-size:13px; border:0; background:transparent; color:var(--muted); padding:7px 12px; cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--black); color:var(--surface); font-weight:500}
+
+/* Abas de cliente. Cada conta tem sua própria janela de veiculação, então o período
+   é sempre resolvido contra as datas da aba ativa — trocar de aba não arrasta o
+   recorte da outra. */
+.tabs{display:flex; gap:2px; border-bottom:1px solid var(--border); margin-bottom:20px}
+.tabs button{font:inherit; font-size:14px; font-weight:500; border:0; background:transparent;
+  color:var(--muted); padding:11px 18px; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px}
+.tabs button:hover{color:var(--text)}
+.tabs button[aria-selected="true"]{color:var(--black); border-bottom-color:var(--yellow)}
+.tabs .tab-sub{font-size:11.5px; color:var(--muted); font-weight:400; display:block; margin-top:2px}
+
+.dtr{display:none; flex-basis:100%; align-items:center; gap:8px; flex-wrap:wrap; font-size:13px; color:var(--muted)}
+.dtr.on{display:flex}
+.dtr label{display:inline-flex; align-items:center; gap:6px}
+.dtr input[type="date"]{font:inherit; font-size:13px; color:var(--text); background:var(--surface); border:1px solid var(--border2); border-radius:8px; padding:6px 9px}
+.dtr .aviso{color:var(--warn)}
+
+.note{display:flex; gap:10px; align-items:flex-start; border:1px solid var(--border); border-left:3px solid var(--muted); background:var(--surface); border-radius:8px; padding:11px 14px; margin-bottom:12px; font-size:13.5px; color:var(--muted); box-shadow:var(--shadow)}
+.note b{color:var(--text); font-weight:500}
+.note .ic{flex:none}
+.note.warn{border-left-color:var(--warn)}
+.note.crit{border-left-color:var(--critical)}
+.note.info{border-left-color:var(--cat2)}
+
+section{margin:30px 0 0}
+.sec-head{display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin:0 0 12px}
+h2{font-family:"Bebas Neue","DM Sans",sans-serif; font-weight:400; font-size:23px; letter-spacing:.03em; margin:0; color:var(--black)}
+.sec-head .hint{font-size:12.5px; color:var(--muted)}
+
+.kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(172px,1fr)); gap:12px}
+.kpi{background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:15px 16px 14px; box-shadow:var(--shadow)}
+.kpi .lab{font-size:11px; letter-spacing:.09em; text-transform:uppercase; color:var(--muted); font-weight:500; margin-bottom:7px; display:block}
+.kpi .val{font-size:29px; font-weight:700; line-height:1.05; letter-spacing:-.02em; color:var(--black)}
+.kpi .val.sm{font-size:22px}
+.kpi .foot{font-size:12.5px; color:var(--muted); margin-top:6px}
+.kpi.hero{background:var(--black); border-color:var(--black)}
+.kpi.hero .lab{color:rgba(255,255,255,.6)}
+.kpi.hero .val{color:#fff; font-size:38px}
+.kpi.hero .foot{color:rgba(255,255,255,.75)}
+html.dark .kpi.hero{background:var(--surface2); border-color:var(--border2)}
+html.dark .kpi.hero .lab{color:var(--muted)}
+html.dark .kpi.hero .val{color:var(--black)}
+html.dark .kpi.hero .foot{color:var(--muted)}
+.kpi .delta{display:inline-flex; align-items:center; gap:4px; font-size:12px; font-weight:600; margin-top:7px}
+.delta.up{color:var(--good)} .delta.down{color:var(--critical)} .delta.flat{color:var(--muted)}
+
+.grid{display:grid; gap:14px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(330px,1fr))}
+.card{background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px 18px 14px; box-shadow:var(--shadow)}
+.card h3{font-size:14px; font-weight:500; margin:0 0 3px; color:var(--black)}
+.card .cap{font-size:12.5px; color:var(--muted); margin:0 0 14px}
+.plot{position:relative; height:250px}
+.plot.tall{height:320px}
+.plot.short{height:190px}
+
+/* Funil em trapézio — igual ao dos demais dashboards B16. A magnitude está na
+   largura, não na cor: as faixas de mídia usam o mesmo amarelo e só a última
+   (a compra) vira azul, sinalizando "resultado". */
+.funil{display:flex; flex-direction:column; align-items:center; margin-top:4px}
+.ftrap{background:var(--cat1); border-radius:4px; display:flex; align-items:center; justify-content:space-between;
+       gap:14px; padding:0 20px; height:60px; margin:0 auto; min-width:190px;
+       clip-path:polygon(3% 0%, 97% 0%, 100% 100%, 0% 100%)}
+.ftrap.fim{background:#2563eb}
+.ft-left{display:flex; flex-direction:column; min-width:0}
+.ft-name{font-size:10px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:rgba(17,17,17,.62); white-space:nowrap}
+.ft-val{font-family:"Bebas Neue","DM Sans",sans-serif; font-size:29px; line-height:1; color:#111; letter-spacing:.01em}
+.ft-right{text-align:right; white-space:nowrap}
+.ft-cost{font-family:"Bebas Neue","DM Sans",sans-serif; font-size:23px; line-height:1; color:#111}
+.ft-cost-lbl{font-size:10px; color:rgba(17,17,17,.62); margin-top:3px}
+.ftrap.fim .ft-name, .ftrap.fim .ft-cost-lbl{color:rgba(255,255,255,.75)}
+.ftrap.fim .ft-val, .ftrap.fim .ft-cost{color:#fff}
+.fc{display:flex; flex-direction:column; align-items:center; margin:3px auto}
+.fc-line{width:2px; height:11px; background:var(--border2)}
+.fc-tag{background:var(--surface2); border:1px solid var(--border2); color:var(--text); font-size:10.5px;
+        font-weight:500; padding:3px 11px; border-radius:20px; white-space:nowrap}
+@media (max-width:520px){
+  .ftrap{height:52px; padding:0 13px; gap:8px}
+  .ft-val{font-size:23px} .ft-cost{font-size:18px}
+  .ft-cost-lbl,.ft-name{font-size:9px}
+}
+
+.tw{overflow-x:auto; border:1px solid var(--border); border-radius:10px; background:var(--surface); box-shadow:var(--shadow)}
+table{border-collapse:collapse; width:100%; font-size:13px; min-width:760px}
+th,td{padding:9px 13px; text-align:left; border-bottom:1px solid var(--border); white-space:nowrap}
+th{font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--muted); font-weight:500; background:var(--surface2); position:sticky; top:0}
+td.n{text-align:right; font-variant-numeric:tabular-nums}
+th.n{text-align:right}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover td{background:var(--surface2)}
+td.wrap-ok{white-space:normal; min-width:190px}
+.tw-scroll{max-height:520px; overflow-y:auto}
+.sort-btn{background:none;border:none;font:inherit;color:inherit;cursor:pointer;padding:0;display:inline-flex;align-items:center;gap:3px}
+.sort-btn::after{content:'⇅'; font-size:9px; opacity:.5}
+.sort-btn[data-dir="asc"]::after{content:'↑'; opacity:1; color:var(--yellow)}
+.sort-btn[data-dir="desc"]::after{content:'↓'; opacity:1; color:var(--yellow)}
+.tabs-mini{display:inline-flex; background:var(--surface2); border:1px solid var(--border2); border-radius:8px; overflow:hidden; margin-bottom:12px}
+.tabs-mini button{font:inherit; font-size:12.5px; border:0; background:transparent; color:var(--muted); padding:6px 14px; cursor:pointer}
+.tabs-mini button[aria-pressed="true"]{background:var(--black); color:var(--surface); font-weight:500}
+
+#loading,#erro{padding:38px 0; text-align:center; color:var(--muted); font-size:14px}
+#erro{color:var(--critical)}
+.hidden{display:none !important}
+footer{margin-top:44px; padding-top:16px; border-top:1px solid var(--border); font-size:12.5px; color:var(--muted); display:flex; flex-wrap:wrap; gap:10px; justify-content:space-between}
+@media (max-width:640px){ .plot{height:225px} .kpi .val{font-size:25px} .kpi.hero .val{font-size:32px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="brand">
+      <div class="brand-row">
+        <img class="logo" src="data:image/png;base64,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" alt="Agência B16" width="44" height="44">
+        <div>
+          <div class="kicker">Agência B16 · Business Intelligence</div>
+          <h1>Verum &amp; Mariae</h1>
+        </div>
+      </div>
+      <div class="sub">
+        Performance de mídia paga · <b>Meta Ads</b> · duas contas
+      </div>
+    </div>
+    <div class="tools">
+      <div class="seg" role="group" aria-label="Período">
+        <button data-range="mes" aria-pressed="true">Mês atual</button>
+        <button data-range="30" aria-pressed="false">30 dias</button>
+        <button data-range="7" aria-pressed="false">7 dias</button>
+        <button data-range="all" aria-pressed="false">Tudo</button>
+        <button data-range="custom" aria-pressed="false">Período</button>
+      </div>
+      <button class="btn" id="btn-tema">◐ Tema</button>
+      <button class="btn" id="btn-refresh">↻ Atualizar</button>
+      <div class="dtr" id="dtr">
+        <label>De <input type="date" id="dt-de" aria-label="Data inicial"></label>
+        <label>Até <input type="date" id="dt-ate" aria-label="Data final"></label>
+        <button class="btn" id="dt-tudo">Máximo</button>
+        <span class="aviso hidden" id="dt-aviso">datas invertidas — troquei a ordem</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="tabs" role="tablist">
+    <button role="tab" id="tab-verum" aria-selected="true" aria-controls="painel">
+      Verum<span class="tab-sub" id="tab-verum-sub">—</span>
+    </button>
+    <button role="tab" id="tab-mariae" aria-selected="false" aria-controls="painel">
+      Mariae Couture<span class="tab-sub" id="tab-mariae-sub">—</span>
+    </button>
+  </div>
+
+  <div id="loading">Carregando do Supabase…</div>
+  <div id="erro" class="hidden"></div>
+
+  <!-- As duas abas têm exatamente a mesma estrutura (só muda a conta), então existe
+       um único painel, redesenhado a cada troca de aba. Evita duplicar o markup e
+       garante que as duas contas sempre sejam lidas do mesmo jeito. -->
+  <main id="app" class="hidden">
+    <div id="banners"></div>
+
+    <section style="margin-top:14px">
+      <div class="sec-head"><h2>Resultado</h2><span class="hint" id="janela"></span></div>
+      <div class="note info"><span class="ic">●</span><div>
+        <b>Receita, ROAS e ticket médio vêm do pixel do Meta</b>, não da plataforma de
+        pagamento. O pixel tende a superestimar — conversões mal atribuídas, testes e
+        checkout abandonado que ele ainda credita. Trate como leitura de mídia, não
+        como faturamento fechado.</div></div>
+      <div class="kpis">
+        <div class="kpi hero">
+          <span class="lab">ROAS</span>
+          <div class="val" id="k-roas">—</div>
+          <div class="foot" id="k-roas-foot">—</div>
+          <span class="delta" id="k-roas-delta"></span>
+        </div>
+        <div class="kpi"><span class="lab">Investimento</span><div class="val sm" id="k-inv">—</div><div class="foot" id="k-inv-foot">—</div><span class="delta" id="k-inv-delta"></span></div>
+        <div class="kpi"><span class="lab">Receita (pixel)</span><div class="val sm" id="k-rec">—</div><div class="foot" id="k-rec-foot">—</div><span class="delta" id="k-rec-delta"></span></div>
+        <div class="kpi"><span class="lab">Compras (pixel)</span><div class="val sm" id="k-compras">—</div><div class="foot" id="k-compras-foot">—</div><span class="delta" id="k-compras-delta"></span></div>
+        <div class="kpi"><span class="lab">Ticket médio</span><div class="val sm" id="k-ticket">—</div><div class="foot" id="k-ticket-foot">—</div><span class="delta" id="k-ticket-delta"></span></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="sec-head"><h2>Eficiência de mídia</h2><span class="hint">Meta Ads</span></div>
+      <div class="kpis">
+        <div class="kpi"><span class="lab">CPM</span><div class="val sm" id="k-cpm">—</div><div class="foot" id="k-cpm-foot">—</div><span class="delta" id="k-cpm-delta"></span></div>
+        <div class="kpi"><span class="lab">CPC</span><div class="val sm" id="k-cpc">—</div><div class="foot" id="k-cpc-foot">—</div><span class="delta" id="k-cpc-delta"></span></div>
+        <div class="kpi"><span class="lab">CTR</span><div class="val sm" id="k-ctr">—</div><div class="foot" id="k-ctr-foot">cliques ÷ impressões</div><span class="delta" id="k-ctr-delta"></span></div>
+        <div class="kpi"><span class="lab">Custo por compra</span><div class="val sm" id="k-cpa">—</div><div class="foot" id="k-cpa-foot">—</div><span class="delta" id="k-cpa-delta"></span></div>
+        <div class="kpi"><span class="lab">Conversão do checkout</span><div class="val sm" id="k-txck">—</div><div class="foot" id="k-txck-foot">compras ÷ checkouts</div><span class="delta" id="k-txck-delta"></span></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="sec-head"><h2>Funil de mídia</h2><span class="hint">do impacto à compra</span></div>
+      <div class="card">
+        <h3>Do anúncio ao pixel de compra</h3>
+        <p class="cap">Cada etapa mostra o custo daquele degrau e, entre as faixas, quanto passou
+        da etapa anterior. A magnitude está na largura, nunca só na cor.</p>
+        <div id="funil-box"></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="sec-head"><h2>Evolução diária</h2></div>
+      <div class="grid g2">
+        <div class="card">
+          <h3>Investimento e receita por dia</h3>
+          <p class="cap">Gasto em mídia vs. receita reportada pelo pixel.</p>
+          <div class="plot"><canvas id="c-inv-rec"></canvas></div>
+        </div>
+        <div class="card">
+          <h3>ROAS por dia</h3>
+          <p class="cap">Receita ÷ investimento. A linha tracejada marca o ponto de equilíbrio (1,0).</p>
+          <div class="plot"><canvas id="c-roas"></canvas></div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="sec-head"><h2>Onde o dinheiro foi investido</h2><span class="hint">gasto por dimensão</span></div>
+      <div class="grid g2">
+        <div class="card">
+          <h3>Campanhas</h3>
+          <p class="cap">Ordenado por gasto.</p>
+          <div class="plot short"><canvas id="c-campanha"></canvas></div>
+        </div>
+        <div class="card">
+          <h3>Conjuntos</h3>
+          <p class="cap">Cada conjunto de anúncios.</p>
+          <div class="plot short"><canvas id="c-adset"></canvas></div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="sec-head"><h2>Detalhamento</h2><span class="hint">clique nos cabeçalhos para ordenar</span></div>
+      <div class="tabs-mini" role="group" aria-label="Agrupar por">
+        <button data-group="dia" aria-pressed="true">Por dia</button>
+        <button data-group="campanha" aria-pressed="false">Por campanha</button>
+        <button data-group="anuncio" aria-pressed="false">Por criativo</button>
+      </div>
+      <div class="tw">
+        <div class="tw-scroll">
+        <table id="tabela">
+          <thead><tr>
+            <th data-key="chave"><button class="sort-btn" data-key="chave">Dia / Campanha / Criativo</button></th>
+            <th class="n"><button class="sort-btn" data-key="gasto">Investimento</button></th>
+            <th class="n"><button class="sort-btn" data-key="receita">Receita</button></th>
+            <th class="n"><button class="sort-btn" data-key="roas">ROAS</button></th>
+            <th class="n"><button class="sort-btn" data-key="impressoes">Impressões</button></th>
+            <th class="n"><button class="sort-btn" data-key="cliques">Cliques</button></th>
+            <th class="n"><button class="sort-btn" data-key="ctr">CTR</button></th>
+            <th class="n"><button class="sort-btn" data-key="compras">Compras</button></th>
+            <th class="n"><button class="sort-btn" data-key="cpa">Custo/compra</button></th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <span>Agência B16 · Business Intelligence — Henrique Cardoso</span>
+      <span id="rodape"></span>
+    </footer>
+  </main>
+</div>
+
+<script>
+'use strict';
+
+/* ======================= CONFIG ======================= */
+const SB_URL = 'https://afmisfmhfloabudcajbh.supabase.co/rest/v1';
+const SB_KEY = 'sb_publishable_eNNYTx-b4zWWjM8A7XuI5Q_SqcBW7tL';
+
+/* Duas contas de Meta, tabelas separadas no schema "trafego-pago", cada uma com sua
+   view-ponte em public. Diferente do painel do Dr. Anderson, as duas têm pixel de
+   compra funcionando — por isso o funil vai até a compra e existe ROAS. */
+const CLIENTES = {
+  verum:  { nome:'Verum',          conta:'VERUM01',        view:'dash_verum_midia'  },
+  mariae: { nome:'Mariae Couture', conta:'MARIAE COUTURE', view:'dash_mariae_midia' },
+};
+
+/* ======================= UTIL ======================= */
+const $  = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const brl = v => 'R$ ' + (v||0).toLocaleString('pt-BR',{minimumFractionDigits:2, maximumFractionDigits:2});
+const brlCurto = v => Math.abs(v) >= 1000
+  ? 'R$ ' + (v/1000).toLocaleString('pt-BR',{maximumFractionDigits:1}) + 'k' : brl(v);
+const numBR = v => (v||0).toLocaleString('pt-BR');
+const pct = (a,b) => { if(!b) return '—'; const v = a/b*100;
+  return (v < 10 ? v.toFixed(1) : v.toFixed(0)).replace('.',',') + '%'; };
+const div = (a,b) => b ? a/b : null;
+const nOrDash = (v, fmt) => v == null ? '—' : fmt(v);
+const roasFmt = v => (v||0).toLocaleString('pt-BR',{minimumFractionDigits:2, maximumFractionDigits:2});
+const dataBR = iso => { if(!iso) return '—'; const p = String(iso).slice(0,10).split('-'); return p.length===3 ? p[2]+'/'+p[1] : iso; };
+const isoLocal = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const soma = (arr, f) => arr.reduce((s,o) => s + (Number(f(o))||0), 0);
+
+function encurtar(s, n=40){
+  s = String(s);
+  if (s.length <= n) return s;
+  const cab = Math.ceil((n-1)*0.55);
+  return s.slice(0,cab) + '…' + s.slice(-(n-1-cab));
+}
+
+/* ======================= FONTE ======================= */
+/* O PostgREST corta em 1000 linhas por padrão. A Verum já passa de 1400, então sem
+   paginação o histórico viria truncado. Pagina com Range até esgotar. */
+async function sbPaginado(view, params, tamanho=1000){
+  let tudo = [], offset = 0;
+  for(;;){
+    const r = await fetch(`${SB_URL}/${view}?${params}`, {
+      headers:{ apikey:SB_KEY, Authorization:'Bearer '+SB_KEY, Range:`${offset}-${offset+tamanho-1}` },
+      cache:'no-store' });
+    if (!r.ok) throw new Error(`${view}: HTTP ${r.status} — ${(await r.text()).slice(0,140)}`);
+    const lote = await r.json();
+    tudo = tudo.concat(lote);
+    if (lote.length < tamanho) break;
+    offset += tamanho;
+  }
+  return tudo;
+}
+
+function agrupar(arr, fn){
+  const m = new Map();
+  arr.forEach(o => { const k = fn(o) ?? '(sem atribuição)'; if(!m.has(k)) m.set(k,[]); m.get(k).push(o); });
+  return m;
+}
+
+/* ======================= CHART.JS ======================= */
+const escuro = () => document.documentElement.classList.contains('dark');
+const graficos = {};
+function desenhar(id, cfg){
+  if (graficos[id]) graficos[id].destroy();
+  const el = document.getElementById(id); if (!el) return;
+  graficos[id] = new Chart(el.getContext('2d'), cfg);
+}
+
+const rotulos = {
+  id:'rotulos',
+  afterDatasetsDraw(ch, _a, opts){
+    const fmt = opts.fmt || (v => v);
+    const ctx = ch.ctx; ctx.save();
+    ctx.font = '600 11px "DM Sans", system-ui, sans-serif';
+    ctx.fillStyle = css('--muted');
+    ch.data.datasets.forEach((ds, di) => {
+      const meta = ch.getDatasetMeta(di); if (meta.hidden) return;
+      meta.data.forEach((el, i) => {
+        const v = ds.data[i]; if (v == null || v === 0) return;
+        const horiz = ch.options.indexAxis === 'y';
+        ctx.textAlign = horiz ? 'left' : 'center';
+        ctx.textBaseline = horiz ? 'middle' : 'bottom';
+        ctx.fillText(fmt(v, di), el.x + (horiz ? 6 : 0), el.y + (horiz ? 0 : -4));
+      });
+    });
+    ctx.restore();
+  }
+};
+Chart.register(rotulos);
+
+/* Linha de break-even do ROAS: abaixo de 1,0 a mídia devolve menos do que custou. */
+const linhaUm = {
+  id:'linhaUm',
+  afterDraw(ch, _a, opts){
+    if (!opts || opts.on !== true) return;
+    const y = ch.scales.y; if (!y) return;
+    const py = y.getPixelForValue(1);
+    if (py < ch.chartArea.top || py > ch.chartArea.bottom) return;
+    const ctx = ch.ctx; ctx.save();
+    ctx.strokeStyle = css('--critical'); ctx.setLineDash([5,4]); ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(ch.chartArea.left, py); ctx.lineTo(ch.chartArea.right, py); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = css('--critical');
+    ctx.font = '600 10px "DM Sans", system-ui, sans-serif';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+    ctx.fillText('equilíbrio (1,0)', ch.chartArea.left + 4, py - 3);
+    ctx.restore();
+  }
+};
+Chart.register(linhaUm);
+
+function eixos({horiz=false, moeda=false, pad=1.2} = {}){
+  const tick = { color: css('--muted'), font:{ family:'"DM Sans", system-ui, sans-serif', size:11 } };
+  const val = {
+    grid:{ color: css('--grid'), drawTicks:false }, border:{ color: css('--baseline') },
+    ticks:{ ...tick, precision: moeda ? undefined : 0, callback: v => moeda ? brlCurto(v) : v },
+    grace: Math.round((pad-1)*100) + '%', beginAtZero:true,
+  };
+  const cat = { grid:{display:false}, border:{ color: css('--baseline') },
+                ticks:{ ...tick, autoSkip: !horiz, maxRotation: horiz ? undefined : 0,
+                        crossAlign: horiz ? 'far' : undefined } };
+  return horiz ? { x:val, y:cat } : { x:cat, y:val };
+}
+function tooltip(fmt){
+  return { enabled:true, backgroundColor: escuro() ? '#333' : '#111', titleColor:'#fff', bodyColor:'#fff',
+    borderWidth:0, padding:10, cornerRadius:7, displayColors:true, boxWidth:9, boxHeight:9,
+    titleFont:{ family:'"DM Sans", system-ui, sans-serif', size:12.5, weight:'500' },
+    bodyFont:{ family:'"DM Sans", system-ui, sans-serif', size:12.5 }, callbacks:{ label:fmt } };
+}
+const BASE = { responsive:true, maintainAspectRatio:false, animation:{duration:250},
+               interaction:{ mode:'index', intersect:false } };
+const barra = { borderRadius:4, borderSkipped:false, borderWidth:2, maxBarThickness:38 };
+const legenda = { display:true, position:'top',
+  labels:{ color:css('--muted'), font:{ family:'"DM Sans", system-ui, sans-serif', size:12 } } };
+
+/* ======================= ESTADO ======================= */
+const DADOS = {};            // { verum: [...], mariae: [...] }
+let aba = 'verum';
+let ordSort = { key:'gasto', dir:'desc' };
+let grupoTab = 'dia';
+
+/* ======================= PERÍODO ======================= */
+/* Cada conta tem sua própria janela de veiculação (a Verum vem de janeiro, a Mariae
+   só de agosto), então o período é resolvido contra as datas da aba ativa. */
+function janela(dados){
+  const seg = ($('.seg button[aria-pressed="true"]')||{}).dataset?.range || 'mes';
+  $('#dtr').classList.toggle('on', seg === 'custom');
+
+  const datas = dados.map(r => r.dia).filter(Boolean).map(d => String(d).slice(0,10)).sort();
+  const minD = datas[0], maxD = datas[datas.length-1];
+
+  let de = null, ate = null;
+  if (seg === 'custom'){
+    de  = $('#dt-de').value  || minD || null;
+    ate = $('#dt-ate').value || maxD || null;
+    const invertido = de && ate && de > ate;
+    if (invertido){ [de, ate] = [ate, de]; $('#dt-de').value = de; $('#dt-ate').value = ate; }
+    $('#dt-aviso').classList.toggle('hidden', !invertido);
+  } else if (seg === 'all'){
+    de = minD; ate = maxD;
+  } else if (seg === 'mes'){
+    const hoje = new Date(); hoje.setHours(0,0,0,0);
+    de  = isoLocal(new Date(hoje.getFullYear(), hoje.getMonth(), 1));
+    ate = isoLocal(hoje);
+  } else {
+    const hoje = new Date(); hoje.setHours(0,0,0,0);
+    ate = isoLocal(hoje);
+    const c = new Date(hoje); c.setDate(c.getDate() - (parseInt(seg,10)-1));
+    de = isoLocal(c);
+  }
+  return { de, ate, minD, maxD };
+}
+
+const dentro = (d, a, b) => { const s = String(d||'').slice(0,10); return (!a || s >= a) && (!b || s <= b); };
+
+function anterior(de, ate){
+  if (!de || !ate) return { de:null, ate:null };
+  const dDe = new Date(de+'T00:00:00'), dAte = new Date(ate+'T00:00:00');
+  const dias = Math.round((dAte - dDe) / 86400000) + 1;
+  const ateAntD = new Date(dDe); ateAntD.setDate(ateAntD.getDate() - 1);
+  const deAntD = new Date(ateAntD); deAntD.setDate(deAntD.getDate() - (dias - 1));
+  return { de: isoLocal(deAntD), ate: isoLocal(ateAntD) };
+}
+
+/* corInvertida: para custos (CPM, CPC, custo por compra), subir é ruim. */
+function deltaEl(id, atualV, antV, corInvertida=false){
+  const el = $(id); if (!el) return;
+  if (atualV == null || antV == null || antV === 0){ el.className='delta flat'; el.textContent=''; return; }
+  const variacao = (atualV - antV) / antV * 100;
+  const sobe = variacao > 0.5, desce = variacao < -0.5;
+  el.className = 'delta ' + (sobe ? (corInvertida ? 'down' : 'up') : desce ? (corInvertida ? 'up' : 'down') : 'flat');
+  if (!sobe && !desce){ el.textContent = '● estável vs período anterior'; return; }
+  el.textContent = `${sobe ? '▲' : '▼'} ${Math.abs(variacao).toFixed(0)}% vs período anterior`;
+}
+
+const agrega = arr => ({
+  inv:  soma(arr, r=>r.gasto),      imp:      soma(arr, r=>r.impressoes),
+  clk:  soma(arr, r=>r.cliques),    lpv:      soma(arr, r=>r.lpv),
+  ck:   soma(arr, r=>r.checkouts),  compras:  soma(arr, r=>r.compras_pixel),
+  rec:  soma(arr, r=>r.receita_pixel),
+});
+
+/* ======================= RENDER ======================= */
+function render(){
+  const cli = CLIENTES[aba];
+  const dados = DADOS[aba] || [];
+  const { de, ate, minD, maxD } = janela(dados);
+  const atual = dados.filter(r => dentro(r.dia, de, ate));
+  const ant = anterior(de, ate);
+  const prev = dados.filter(r => dentro(r.dia, ant.de, ant.ate));
+
+  $('#janela').textContent = !dados.length ? 'sem dado'
+    : atual.length ? `${dataBR(de)} → ${dataBR(ate)}`
+    : `${dataBR(de)} → ${dataBR(ate)} · sem dado no período`;
+
+  const A = agrega(atual), P = agrega(prev);
+
+  const roas   = div(A.rec, A.inv),     roasP   = div(P.rec, P.inv);
+  const ticket = div(A.rec, A.compras), ticketP = div(P.rec, P.compras);
+  const cpm    = div(A.inv*1000, A.imp),cpmP    = div(P.inv*1000, P.imp);
+  const cpc    = div(A.inv, A.clk),     cpcP    = div(P.inv, P.clk);
+  const ctr    = div(A.clk, A.imp),     ctrP    = div(P.clk, P.imp);
+  const cpa    = div(A.inv, A.compras), cpaP    = div(P.inv, P.compras);
+  const txck   = div(A.compras, A.ck),  txckP   = div(P.compras, P.ck);
+
+  $('#k-roas').textContent = nOrDash(roas, roasFmt);
+  $('#k-roas-foot').textContent = roas == null ? 'sem investimento no período'
+    : `${brlCurto(A.rec)} de receita ÷ ${brlCurto(A.inv)} investidos`;
+  deltaEl('#k-roas-delta', roas, roasP);
+
+  $('#k-inv').textContent = brl(A.inv);
+  $('#k-inv-foot').textContent = `${numBR(atual.length)} linha(s) de anúncio`;
+  deltaEl('#k-inv-delta', A.inv, P.inv);
+
+  $('#k-rec').textContent = brl(A.rec);
+  $('#k-rec-foot').textContent = 'valor de conversão do pixel';
+  deltaEl('#k-rec-delta', A.rec, P.rec);
+
+  $('#k-compras').textContent = numBR(Math.round(A.compras));
+  $('#k-compras-foot').textContent = nOrDash(cpa, brl) + ' por compra';
+  deltaEl('#k-compras-delta', A.compras, P.compras);
+
+  $('#k-ticket').textContent = nOrDash(ticket, brl);
+  $('#k-ticket-foot').textContent = 'receita ÷ compras';
+  deltaEl('#k-ticket-delta', ticket, ticketP);
+
+  $('#k-cpm').textContent = nOrDash(cpm, brl);
+  $('#k-cpm-foot').textContent = numBR(A.imp) + ' impressões';
+  deltaEl('#k-cpm-delta', cpm, cpmP, true);
+
+  $('#k-cpc').textContent = nOrDash(cpc, brl);
+  $('#k-cpc-foot').textContent = numBR(A.clk) + ' cliques no link';
+  deltaEl('#k-cpc-delta', cpc, cpcP, true);
+
+  $('#k-ctr').textContent = pct(A.clk, A.imp);
+  deltaEl('#k-ctr-delta', ctr, ctrP);
+
+  $('#k-cpa').textContent = nOrDash(cpa, brl);
+  $('#k-cpa-foot').textContent = numBR(Math.round(A.compras)) + ' compra(s)';
+  deltaEl('#k-cpa-delta', cpa, cpaP, true);
+
+  $('#k-txck').textContent = pct(A.compras, A.ck);
+  $('#k-txck-foot').textContent = numBR(Math.round(A.ck)) + ' checkout(s) iniciado(s)';
+  deltaEl('#k-txck-delta', txck, txckP);
+
+  /* ---- funil ---- */
+  /* A pílula de "% da etapa anterior" só aparece de Impressões em diante: entre
+     Investimento e Impressões são unidades diferentes (R$ vs contagem). */
+  const etapas = [
+    ['Investimento',      A.inv,     null, 'R$ investidos',      brl],
+    ['Impressões',        A.imp,     cpm,  'CPM (por 1.000)',    numBR],
+    ['Cliques',           A.clk,     cpc,  'CPC',                numBR],
+    ['Visitas à página',  A.lpv,     div(A.inv, A.lpv), 'Custo por LPV',      numBR],
+    ['Checkout iniciado', A.ck,      div(A.inv, A.ck),  'Custo por checkout', numBR],
+    ['Compra (pixel)',    Math.round(A.compras), cpa,   'Custo por compra',   numBR],
+  ].filter(e => e[1] != null && e[1] > 0);
+
+  const larg = i => etapas.length < 2 ? 100 : 100 - 68 * (i / (etapas.length - 1));
+  $('#funil-box').innerHTML = '<div class="funil">' + etapas.map((e, i) => {
+    const [nome, val, custo, rotCusto, fmtVal] = e;
+    const antV = i ? etapas[i-1][1] : null;
+    const elo = i < 2 ? '' : `<div class="fc"><div class="fc-line"></div>${antV > 0
+      ? `<div class="fc-tag">${esc(pct(val, antV))} da etapa anterior</div>` : ''
+      }<div class="fc-line"></div></div>`;
+    const ultima = i === etapas.length - 1;
+    return `${elo}
+    <div class="ftrap${ultima ? ' fim' : ''}" style="width:${larg(i).toFixed(1)}%">
+      <div class="ft-left">
+        <div class="ft-name">${esc(nome)}</div>
+        <div class="ft-val">${fmtVal(val)}</div>
+      </div>
+      <div class="ft-right">
+        <div class="ft-cost">${esc(nOrDash(custo, brl))}</div>
+        <div class="ft-cost-lbl">${esc(rotCusto)}</div>
+      </div>
+    </div>`;
+  }).join('') + '</div>';
+
+  /* ---- evolução ---- */
+  const porDia = agrupar(atual, r => r.dia);
+  const dias = [...porDia.keys()].sort();
+
+  desenhar('c-inv-rec', {
+    type:'bar', data:{ labels:dias.map(dataBR), datasets:[
+      { label:'Investimento', data:dias.map(d => soma(porDia.get(d), r=>r.gasto)),
+        backgroundColor:css('--cat1'), borderColor:css('--surface'), ...barra },
+      { label:'Receita (pixel)', data:dias.map(d => soma(porDia.get(d), r=>r.receita_pixel)),
+        backgroundColor:css('--cat2'), borderColor:css('--surface'), ...barra },
+    ]},
+    options:{ ...BASE, scales:eixos({moeda:true}), plugins:{ legend:legenda,
+      tooltip: tooltip(c => `${c.dataset.label}: ${brl(c.parsed.y)}`) } },
+  });
+
+  desenhar('c-roas', {
+    type:'line', data:{ labels:dias.map(dataBR), datasets:[{ label:'ROAS',
+      data:dias.map(d => { const g = porDia.get(d);
+        return div(soma(g,r=>r.receita_pixel), soma(g,r=>r.gasto)); }),
+      borderColor:css('--cat2'), backgroundColor:css('--cat2'), pointRadius:3, pointHoverRadius:5,
+      pointBackgroundColor:css('--surface'), pointBorderColor:css('--cat2'), pointBorderWidth:2,
+      borderWidth:2, tension:.25, spanGaps:true }]},
+    options:{ ...BASE, scales:eixos({pad:1.3}), plugins:{ legend:{display:false}, linhaUm:{ on:true },
+      tooltip: tooltip(c => c.parsed.y == null ? 'sem investimento no dia' : roasFmt(c.parsed.y) + ' de ROAS') } },
+  });
+
+  /* ---- por dimensão ---- */
+  function porDimensao(id, chaveFn, corte){
+    const g = agrupar(atual, chaveFn);
+    const chaves = [...g.entries()]
+      .map(([k, itens]) => ({ k, gasto: soma(itens, r=>r.gasto) }))
+      .sort((a,b) => b.gasto - a.gasto).slice(0, corte);
+    desenhar(id, {
+      type:'bar',
+      data:{ labels:chaves.map(x => encurtar(x.k, 30)), datasets:[
+        { label:'Investido', data:chaves.map(x=>x.gasto), backgroundColor:css('--cat1'),
+          borderColor:css('--surface'), ...barra }]},
+      options:{ ...BASE, indexAxis:'y', scales:eixos({horiz:true, moeda:true, pad:1.3}),
+        plugins:{ legend:{display:false}, tooltip: tooltip(c => brl(c.parsed.x)),
+          rotulos:{ fmt: v => brlCurto(v) } } },
+    });
+  }
+  porDimensao('c-campanha', r => r.campanha, 6);
+  porDimensao('c-adset', r => r.conjunto, 6);
+
+  montarTabela(atual);
+
+  /* ---- banners ---- */
+  const out = [];
+  if (A.inv === 0 && dados.length){
+    out.push(`<div class="note warn"><span class="ic">▲</span><div>
+      <b>Sem investimento no período selecionado</b> para <b>${esc(cli.nome)}</b>. Esta conta tem
+      dado de <b>${dataBR(minD)}</b> a <b>${dataBR(maxD)}</b> — use <b>Tudo</b> ou escolha um
+      período dentro dessa janela.</div></div>`);
+  }
+  if (roas != null && roas < 1 && A.inv > 0){
+    out.push(`<div class="note crit"><span class="ic">■</span><div>
+      <b>ROAS abaixo do equilíbrio</b> (${roasFmt(roas)}): no período, a mídia devolveu menos
+      do que custou — ${brl(A.rec)} de receita para ${brl(A.inv)} investidos.</div></div>`);
+  }
+  if (roas != null && roasP != null && roasP > 0 && (roas - roasP)/roasP < -0.25){
+    out.push(`<div class="note warn"><span class="ic">▲</span><div>
+      <b>ROAS caiu ${Math.abs(((roas-roasP)/roasP*100)).toFixed(0)}%</b> vs o período anterior de
+      mesma duração (${roasFmt(roas)} agora vs ${roasFmt(roasP)} antes).</div></div>`);
+  }
+  /* Uma venda de ticket muito alto consegue sozinha dobrar o ROAS de um período curto
+     — em 04/09 uma única compra de R$ 10.122,18 levou o mês da Verum a ROAS 36,98. Sem
+     este aviso o número parece um mês excepcional, quando é uma compra só. */
+  const maiorLinha = atual.reduce((m, r) =>
+    (Number(r.receita_pixel)||0) > (Number(m?.receita_pixel)||0) ? r : m, null);
+  const maiorRec = Number(maiorLinha?.receita_pixel) || 0;
+  if (A.rec > 0 && maiorRec / A.rec >= 0.5 && A.compras <= 20){
+    out.push(`<div class="note info"><span class="ic">●</span><div>
+      <b>Uma única compra responde por ${pct(maiorRec, A.rec)} da receita do período</b>
+      (${brl(maiorRec)} em ${dataBR(maiorLinha.dia)}, campanha ${esc(encurtar(maiorLinha.campanha || '—', 44))}).
+      Com poucas compras, um ticket alto isolado infla o ROAS — vale olhar um período
+      maior antes de concluir tendência.</div></div>`);
+  }
+  $('#banners').innerHTML = out.join('');
+
+  $('#rodape').textContent = `Fonte: Supabase (Meta Ads via Stract) · conta ${cli.conta} · atualizado `
+    + new Date().toLocaleString('pt-BR');
+}
+
+/* ======================= TABELA ======================= */
+function montarTabela(atual){
+  const chaveFn = r => grupoTab === 'dia' ? r.dia
+                     : grupoTab === 'campanha' ? (r.campanha || '(sem nome)')
+                     : (r.anuncio || '(sem nome)');
+  const linhas = [...agrupar(atual, chaveFn).entries()].map(([k, arr]) => {
+    const a = agrega(arr);
+    return { chave:k, gasto:a.inv, receita:a.rec, roas:div(a.rec, a.inv),
+             impressoes:a.imp, cliques:a.clk, ctr:div(a.clk, a.imp),
+             compras:a.compras, cpa:div(a.inv, a.compras) };
+  });
+
+  const dir = ordSort.dir === 'asc' ? 1 : -1;
+  linhas.sort((a,b) => {
+    const va = a[ordSort.key], vb = b[ordSort.key];
+    if (ordSort.key === 'chave') return dir * String(va).localeCompare(String(vb), 'pt-BR');
+    return dir * ((va == null ? -Infinity : va) - (vb == null ? -Infinity : vb));
+  });
+
+  $('#tabela tbody').innerHTML = linhas.map(l => `<tr>
+      <td>${grupoTab === 'dia' ? dataBR(l.chave) : `<span class="wrap-ok">${esc(encurtar(l.chave))}</span>`}</td>
+      <td class="n">${esc(brl(l.gasto))}</td>
+      <td class="n">${esc(brl(l.receita))}</td>
+      <td class="n">${esc(nOrDash(l.roas, roasFmt))}</td>
+      <td class="n">${numBR(l.impressoes)}</td>
+      <td class="n">${numBR(l.cliques)}</td>
+      <td class="n">${esc(pct(l.cliques, l.impressoes))}</td>
+      <td class="n">${numBR(Math.round(l.compras))}</td>
+      <td class="n">${esc(nOrDash(l.cpa, brl))}</td>
+    </tr>`).join('') || '<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:24px">sem dado no período</td></tr>';
+
+  $$('.sort-btn').forEach(b => b.removeAttribute('data-dir'));
+  const ativo = $(`.sort-btn[data-key="${ordSort.key}"]`);
+  if (ativo) ativo.setAttribute('data-dir', ordSort.dir);
+}
+
+/* ======================= CARGA ======================= */
+function resumoAba(dados){
+  if (!dados.length) return 'sem dado';
+  const datas = dados.map(r=>r.dia).filter(Boolean).map(d=>String(d).slice(0,10)).sort();
+  return `${dataBR(datas[0])} → ${dataBR(datas[datas.length-1])} · ${brlCurto(soma(dados, r=>r.gasto))}`;
+}
+
+async function carregar(){
+  $('#loading').classList.remove('hidden');
+  $('#erro').classList.add('hidden');
+  $('#app').classList.add('hidden');
+  try{
+    const chaves = Object.keys(CLIENTES);
+    const res = await Promise.all(chaves.map(k =>
+      sbPaginado(CLIENTES[k].view, 'select=*&order=dia.asc')));
+    chaves.forEach((k, i) => { DADOS[k] = res[i]; });
+
+    $('#tab-verum-sub').textContent  = resumoAba(DADOS.verum);
+    $('#tab-mariae-sub').textContent = resumoAba(DADOS.mariae);
+
+    /* Limites do seletor de datas cobrem as duas contas, já que o controle é
+       compartilhado entre as abas. */
+    const todas = chaves.flatMap(k => DADOS[k].map(r=>r.dia))
+      .filter(Boolean).map(d=>String(d).slice(0,10)).sort();
+    if (todas.length){
+      ['#dt-de','#dt-ate'].forEach(s => { const el = $(s); el.min = todas[0]; el.max = todas[todas.length-1]; });
+      if (!$('#dt-de').value)  $('#dt-de').value  = todas[0];
+      if (!$('#dt-ate').value) $('#dt-ate').value = todas[todas.length-1];
+    }
+
+    render();
+    $('#loading').classList.add('hidden');
+    $('#app').classList.remove('hidden');
+  } catch(e){
+    $('#loading').classList.add('hidden');
+    $('#erro').textContent = 'Não consegui carregar os dados do Supabase — ' + e.message;
+    $('#erro').classList.remove('hidden');
+  }
+}
+
+/* ======================= EVENTOS ======================= */
+function trocarAba(nova){
+  aba = nova;
+  $('#tab-verum').setAttribute('aria-selected', String(nova === 'verum'));
+  $('#tab-mariae').setAttribute('aria-selected', String(nova === 'mariae'));
+  render();
+}
+$('#tab-verum').addEventListener('click', () => trocarAba('verum'));
+$('#tab-mariae').addEventListener('click', () => trocarAba('mariae'));
+
+$$('.seg button').forEach(b => b.addEventListener('click', () => {
+  $$('.seg button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  render();
+}));
+['#dt-de','#dt-ate'].forEach(s => $(s).addEventListener('change', render));
+$('#dt-tudo').addEventListener('click', () => {
+  $('#dt-de').value = $('#dt-de').min; $('#dt-ate').value = $('#dt-ate').max; render();
+});
+
+$$('.tabs-mini button').forEach(b => b.addEventListener('click', () => {
+  $$('.tabs-mini button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  grupoTab = b.dataset.group;
+  render();
+}));
+
+$$('.sort-btn').forEach(b => b.addEventListener('click', () => {
+  const key = b.dataset.key;
+  if (ordSort.key === key) ordSort.dir = ordSort.dir === 'asc' ? 'desc' : 'asc';
+  else ordSort = { key, dir: key === 'chave' ? 'asc' : 'desc' };
+  render();
+}));
+
+$('#btn-refresh').addEventListener('click', () => {
+  const b = $('#btn-refresh'); b.disabled = true; b.textContent = '↻ Atualizando…';
+  carregar().finally(() => { b.disabled = false; b.textContent = '↻ Atualizar'; });
+});
+
+$('#btn-tema').addEventListener('click', () => {
+  document.documentElement.classList.toggle('dark');
+  try { localStorage.setItem('b16-tema', escuro() ? 'dark' : 'light'); } catch(e){}
+  if (Object.keys(DADOS).length) render();
+});
+try { if (localStorage.getItem('b16-tema') === 'dark') document.documentElement.classList.add('dark'); } catch(e){}
+
+carregar();
+</script>
+</body>
+</html>
