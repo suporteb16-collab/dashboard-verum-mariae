@@ -105,8 +105,10 @@ não tem aba de Google, ao contrário do painel do Dr. Anderson.
 - **Funil:** a pílula de "% da etapa anterior" só aparece de Impressões em diante. Entre
   Investimento → Impressões são unidades diferentes (R$ vs. contagem) e a taxa não teria
   leitura válida.
-- **Gráfico de ROAS por dia** traz uma linha tracejada no 1,0 — abaixo dela, a mídia
-  devolveu menos do que custou.
+- **A evolução diária mostra só investimento.** Plotar receita na mesma escala achatava
+  as barras de gasto (uma venda de R$ 10 mil contra diárias de ~R$ 70, o eixo ia a R$ 12k),
+  e o ROAS diário chegava a 150 num dia — a curva virava um pico isolado com o resto
+  colado no zero. Receita e ROAS estão nos KPIs e na tabela, onde se leem melhor.
 
 ---
 
