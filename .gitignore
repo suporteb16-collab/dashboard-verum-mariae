@@ -8,3 +8,6 @@ __pycache__/
 
 # extração intermediária: o dado publicado é o do Supabase, não este arquivo
 vendas_ink.csv
+
+# workflow n8n: carrega a apikey da Evolution em texto puro
+n8n-ink-supabase.json
