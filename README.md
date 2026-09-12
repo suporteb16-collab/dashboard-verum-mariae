@@ -61,6 +61,51 @@ devolveu menos do que custou) e **queda de ROAS acima de 25%** vs. o período an
 
 ---
 
+## A aba Pedidos (venda confirmada)
+
+As duas primeiras abas mostram **mídia** (o que o pixel do Meta atribui). A aba
+**Pedidos** mostra **venda confirmada**, direto da Reserva INK — a plataforma onde a
+compra acontece.
+
+Uma venda é um pedido **pago e que não é troca**. Troca é reenvio de um pedido já
+vendido, não receita nova; incluí-la inflava a base em 106 pedidos / R$ 19.069,68.
+É a mesma regra da tela de Estatísticas da INK, e 7 dos 8 KPIs batem na casa dos
+centavos (o faturado difere R$ 61,05, 0,014%, não explicado — resíduo tolerado).
+
+| | Pixel Meta | INK (real) |
+|---|---|---|
+| Compras (01/01→05/09) | 570 | **650** |
+| Receita | R$ 158.391,33 | **R$ 147.307,49** |
+| ROAS | 4,39 | **4,09** |
+
+O pixel infla valor e erra data — a venda de R$ 10.122,18 que ele credita em 04/09 é
+de **16/07**, atribuída ~7 semanas depois. Mas subconta pedidos.
+
+A aba não tem ROAS: ela não conhece investimento. Cruzar venda real com gasto de
+mídia é o passo seguinte, e depende de modelar isso para a Central de Performance.
+
+**A INK é só a Verum.** Verificado pelos SKUs (catálogo contínuo, sem dois blocos de
+marca) e pelo volume de agosto. A Mariae vende por outro canal.
+
+### Como estes dados atualizam
+
+Não é automático ainda. Hoje roda por comando:
+
+```powershell
+py sync_ink_supabase.py              # janela móvel de 30 dias
+py sync_ink_supabase.py --full       # histórico completo
+py sync_ink_supabase.py --do-csv     # sobe o CSV local, sem chamar a INK
+```
+
+A janela é de 30 dias, e não "desde a última sync", porque na INK **mudança de status
+não altera `created_at`** e o filtro `begin_date` é por data de criação — um pedido de
+20 dias atrás que virou "Pago" hoje não apareceria num filtro estreito. O upsert por
+`(loja, pedido_id)` reaplica sem duplicar.
+
+O Stract **não serve** para isso: o catálogo dele só tem conectores de mídia paga e
+CRM, não há Reserva INK nem HTTP genérico. Para automatizar, n8n (como a Clint) ou
+Task Scheduler do Windows.
+
 ## Fonte de dados
 
 Tudo vem do **Supabase** (projeto `Data&Revenue`), por PostgREST, com a chave publishable.

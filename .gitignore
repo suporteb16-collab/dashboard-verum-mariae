@@ -1,0 +1,10 @@
+# credenciais — api_ink.txt guarda o token da INK E a service_role do Supabase
+api_ink.txt
+*.key
+.env
+
+__pycache__/
+*.pyc
+
+# extração intermediária: o dado publicado é o do Supabase, não este arquivo
+vendas_ink.csv

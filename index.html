@@ -209,6 +209,9 @@ footer{margin-top:44px; padding-top:16px; border-top:1px solid var(--border); fo
     <button role="tab" id="tab-mariae" aria-selected="false" aria-controls="painel">
       Mariae Couture<span class="tab-sub" id="tab-mariae-sub">—</span>
     </button>
+    <button role="tab" id="tab-pedidos" aria-selected="false" aria-controls="painel-pedidos">
+      Pedidos<span class="tab-sub" id="tab-pedidos-sub">—</span>
+    </button>
   </div>
 
   <div id="loading">Carregando do Supabase…</div>
@@ -319,6 +322,102 @@ footer{margin-top:44px; padding-top:16px; border-top:1px solid var(--border); fo
     <footer>
       <span>Agência B16 · Business Intelligence — Henrique Cardoso</span>
       <span id="rodape"></span>
+    </footer>
+  </main>
+
+  <!-- Aba Pedidos: venda confirmada da plataforma (Reserva INK), não pixel.
+       Painel separado porque a unidade é outra — aqui a linha é um pedido, nas
+       abas de mídia é um dia de anúncio. Nada de ROAS: esta aba não conhece
+       investimento. -->
+  <main id="app-pedidos" class="hidden">
+    <section style="margin-top:14px">
+      <div class="sec-head"><h2>Vendas confirmadas</h2><span class="hint" id="ped-janela"></span></div>
+      <div class="note info"><span class="ic">●</span><div>
+        <b>Estes números vêm da Reserva INK</b>, a plataforma onde a venda acontece —
+        não do pixel do Meta. Uma venda é um pedido <b>pago e que não é troca</b>
+        (troca é reenvio de um pedido já vendido, não receita nova). É a mesma regra
+        da tela de Estatísticas da INK, e os totais batem com ela.</div></div>
+      <div class="kpis">
+        <div class="kpi hero">
+          <span class="lab">Faturado</span>
+          <div class="val" id="p-fat">—</div>
+          <div class="foot" id="p-fat-foot">—</div>
+          <span class="delta" id="p-fat-delta"></span>
+        </div>
+        <div class="kpi">
+          <span class="lab">Vendas</span>
+          <div class="val" id="p-vendas">—</div>
+          <div class="foot" id="p-vendas-foot">—</div>
+          <span class="delta" id="p-vendas-delta"></span>
+        </div>
+        <div class="kpi">
+          <span class="lab">Ticket médio</span>
+          <div class="val" id="p-ticket">—</div>
+          <div class="foot">faturado ÷ vendas</div>
+          <span class="delta" id="p-ticket-delta"></span>
+        </div>
+        <div class="kpi">
+          <span class="lab">Lucro</span>
+          <div class="val" id="p-lucro">—</div>
+          <div class="foot" id="p-lucro-foot">margem da loja (kickback)</div>
+          <span class="delta" id="p-lucro-delta"></span>
+        </div>
+        <div class="kpi">
+          <span class="lab">Itens vendidos</span>
+          <div class="val" id="p-itens">—</div>
+          <div class="foot" id="p-itens-foot">—</div>
+        </div>
+        <div class="kpi">
+          <span class="lab">Taxa de entrega</span>
+          <div class="val" id="p-entrega">—</div>
+          <div class="foot" id="p-entrega-foot">—</div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="sec-head"><h2>Faturamento por mês</h2></div>
+      <div class="card"><div class="chart" style="height:260px"><canvas id="g-ped-mes"></canvas></div></div>
+    </section>
+
+    <div class="grid g2">
+      <section>
+        <div class="sec-head"><h2>Status do pedido</h2></div>
+        <div class="card"><div class="chart" style="height:250px"><canvas id="g-ped-status"></canvas></div></div>
+      </section>
+      <section>
+        <div class="sec-head"><h2>Top estados</h2></div>
+        <div class="card"><div class="chart" style="height:250px"><canvas id="g-ped-uf"></canvas></div></div>
+      </section>
+    </div>
+
+    <section>
+      <div class="sec-head">
+        <h2>Pedidos</h2>
+        <span class="hint" id="ped-contagem"></span>
+      </div>
+      <div class="card">
+        <div class="tbl-wrap">
+          <table id="tabela-pedidos">
+            <thead><tr>
+              <th><button class="sort-btn" data-pkey="data">Data</button></th>
+              <th>Referência</th>
+              <th>Status</th>
+              <th>Pagamento</th>
+              <th class="n"><button class="sort-btn" data-pkey="valor">Valor</button></th>
+              <th class="n"><button class="sort-btn" data-pkey="lucro">Lucro</button></th>
+              <th class="n"><button class="sort-btn" data-pkey="itens">Itens</button></th>
+              <th>UF</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <span>Agência B16 · Business Intelligence — Henrique Cardoso</span>
+      <span id="rodape-ped"></span>
     </footer>
   </main>
 </div>
@@ -442,7 +541,9 @@ const barra = { borderRadius:4, borderSkipped:false, borderWidth:2, maxBarThickn
 
 /* ======================= ESTADO ======================= */
 const DADOS = {};            // { verum: [...], mariae: [...] }
+let PEDIDOS = [];            // dash_ink_vendas — 1 linha por pedido
 let aba = 'verum';
+let ordPed = { key:'data', dir:'desc' };
 let ordSort = { key:'gasto', dir:'desc' };
 let grupoTab = 'dia';
 
@@ -678,6 +779,151 @@ function render(){
 }
 
 /* ======================= TABELA ======================= */
+/* ======================= ABA PEDIDOS ======================= */
+/* Uma "venda" é pedido pago que não é troca — mesma regra da tela de
+   Estatísticas da INK. A view já entrega isso pronto em eh_venda. */
+const agregaPed = arr => ({
+  vendas:  arr.length,
+  fat:     soma(arr, r => r.valor_total),
+  lucro:   soma(arr, r => r.valor_kickback),
+  itens:   soma(arr, r => r.qtd_itens),
+});
+
+function renderPedidos(){
+  const datas = PEDIDOS.map(r => r.data).filter(Boolean).sort();
+  const de  = $('#dt-de').value  || datas[0];
+  const ate = $('#dt-ate').value || datas[datas.length-1];
+
+  const noPeriodo = PEDIDOS.filter(r => dentro(r.data, de, ate));
+  const vendas    = noPeriodo.filter(r => r.eh_venda);
+  const ant       = anterior(de, ate);
+  const vendasAnt = PEDIDOS.filter(r => r.eh_venda && dentro(r.data, ant.de, ant.ate));
+
+  const A = agregaPed(vendas), P = agregaPed(vendasAnt);
+  const ticket = div(A.fat, A.vendas), ticketP = div(P.fat, P.vendas);
+
+  $('#ped-janela').textContent = !PEDIDOS.length ? 'sem dado'
+    : vendas.length ? `${dataBR(de)} → ${dataBR(ate)}`
+    : `${dataBR(de)} → ${dataBR(ate)} · sem venda no período`;
+
+  $('#p-fat').textContent = brl(A.fat);
+  $('#p-fat-foot').textContent = `${numBR(A.vendas)} venda(s) confirmada(s)`;
+  deltaEl('#p-fat-delta', A.fat, P.fat);
+
+  $('#p-vendas').textContent = numBR(A.vendas);
+  /* Pedidos que não viraram venda: expirado, não autorizado, reembolsado, troca. */
+  $('#p-vendas-foot').textContent = `${numBR(noPeriodo.length - A.vendas)} pedido(s) fora da regra`;
+  deltaEl('#p-vendas-delta', A.vendas, P.vendas);
+
+  $('#p-ticket').textContent = nOrDash(ticket, brl);
+  deltaEl('#p-ticket-delta', ticket, ticketP);
+
+  $('#p-lucro').textContent = brl(A.lucro);
+  $('#p-lucro-foot').textContent = A.fat
+    ? `${pct(A.lucro, A.fat)} do faturado` : 'margem da loja (kickback)';
+  deltaEl('#p-lucro-delta', A.lucro, P.lucro);
+
+  $('#p-itens').textContent = numBR(A.itens);
+  $('#p-itens-foot').textContent = A.vendas
+    ? `${(A.itens / A.vendas).toLocaleString('pt-BR',{maximumFractionDigits:1})} por venda` : '—';
+
+  const entregues = vendas.filter(r => r.entregue_em).length;
+  $('#p-entrega').textContent = A.vendas ? pct(entregues, A.vendas) : '—';
+  $('#p-entrega-foot').textContent = `${numBR(entregues)} de ${numBR(A.vendas)} com entrega confirmada`;
+
+  desenharPedMes(vendas);
+  desenharPedStatus(noPeriodo);
+  desenharPedUF(vendas);
+  montarTabelaPedidos(noPeriodo);
+
+  $('#ped-contagem').textContent = `${numBR(noPeriodo.length)} pedido(s) no período`;
+  $('#rodape-ped').textContent = PEDIDOS.length
+    ? `Reserva INK · ${numBR(PEDIDOS.length)} pedidos carregados` : '';
+}
+
+function desenharPedMes(vendas){
+  const porMes = agrupar(vendas, r => String(r.data).slice(0,7));
+  const meses = [...porMes.keys()].sort();
+  desenhar('g-ped-mes', { type:'bar',
+    data:{ labels: meses.map(m => { const [a,b] = m.split('-'); return `${b}/${a.slice(2)}`; }),
+      datasets:[{ label:'Faturado', data: meses.map(m => agregaPed(porMes.get(m)).fat),
+        backgroundColor: css('--cat1'), borderColor: css('--cat1'), ...barra }] },
+    options:{ ...BASE, plugins:{ legend:{display:false},
+        tooltip: tooltip(c => brl(c.parsed.y)), rotulos:{ fmt: v => brlCurto(v) } },
+      scales: eixos({ moeda:true }) } });
+}
+
+function desenharPedStatus(pedidos){
+  /* Todos os pedidos, não só as vendas — o ponto aqui é ver o que não converteu. */
+  const porStatus = agrupar(pedidos, r => r.status_pagamento || '(sem status)');
+  const ord = [...porStatus.entries()].sort((a,b) => b[1].length - a[1].length);
+  desenhar('g-ped-status', { type:'bar',
+    data:{ labels: ord.map(([k]) => k),
+      datasets:[{ label:'Pedidos', data: ord.map(([,v]) => v.length),
+        backgroundColor: css('--cat2'), borderColor: css('--cat2'), ...barra }] },
+    options:{ ...BASE, indexAxis:'y', plugins:{ legend:{display:false},
+        tooltip: tooltip(c => numBR(c.parsed.x)), rotulos:{ fmt: v => numBR(v) } },
+      scales: eixos({ horiz:true }) } });
+}
+
+function desenharPedUF(vendas){
+  const porUF = agrupar(vendas.filter(r => r.uf), r => r.uf);
+  const top = [...porUF.entries()]
+    .map(([k,v]) => [k, agregaPed(v).fat]).sort((a,b) => b[1]-a[1]).slice(0,8);
+  desenhar('g-ped-uf', { type:'bar',
+    data:{ labels: top.map(([k]) => k),
+      datasets:[{ label:'Faturado', data: top.map(([,v]) => v),
+        backgroundColor: css('--cat2'), borderColor: css('--cat2'), ...barra }] },
+    options:{ ...BASE, indexAxis:'y', plugins:{ legend:{display:false},
+        tooltip: tooltip(c => brl(c.parsed.x)), rotulos:{ fmt: v => brlCurto(v) } },
+      scales: eixos({ horiz:true, moeda:true }) } });
+}
+
+function montarTabelaPedidos(pedidos){
+  const dir = ordPed.dir === 'asc' ? 1 : -1;
+  const val = (r, k) => k === 'data' ? String(r.data||'')
+            : k === 'valor' ? Number(r.valor_total)||0
+            : k === 'lucro' ? Number(r.valor_kickback)||0
+            : Number(r.qtd_itens)||0;
+  const linhas = [...pedidos].sort((a,b) => {
+    const va = val(a, ordPed.key), vb = val(b, ordPed.key);
+    return ordPed.key === 'data' ? dir * String(va).localeCompare(String(vb)) : dir * (va - vb);
+  }).slice(0, 300);   // teto de render: a tabela é para inspeção, não para exportar
+
+  $('#tabela-pedidos tbody').innerHTML = linhas.map(l => `<tr${l.eh_venda ? '' : ' style="opacity:.55"'}>
+      <td>${dataBR(l.data)}</td>
+      <td><span class="wrap-ok">${esc(l.referencia || '—')}</span></td>
+      <td>${esc(l.status_pedido_txt || '—')}</td>
+      <td>${esc(l.status_pagamento || '—')}${l.eh_troca ? ' <b>· troca</b>' : ''}</td>
+      <td class="n">${esc(brl(l.valor_total))}</td>
+      <td class="n">${esc(brl(l.valor_kickback))}</td>
+      <td class="n">${numBR(l.qtd_itens)}</td>
+      <td>${esc(l.uf || '—')}</td>
+    </tr>`).join('') || '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:24px">sem pedido no período</td></tr>';
+
+  if (pedidos.length > linhas.length){
+    $('#ped-contagem').textContent =
+      `${numBR(pedidos.length)} pedido(s) — mostrando os ${numBR(linhas.length)} primeiros`;
+  }
+
+  $$('.sort-btn[data-pkey]').forEach(b => b.removeAttribute('data-dir'));
+  const ativo = $(`.sort-btn[data-pkey="${ordPed.key}"]`);
+  if (ativo) ativo.setAttribute('data-dir', ordPed.dir);
+}
+
+/* Ponto único de redesenho: o filtro de datas e o tema são compartilhados
+   entre as abas, e cada um deles precisa acertar o painel que está visível. */
+function redesenhar(){
+  if (aba === 'pedidos') renderPedidos(); else render();
+}
+
+function resumoPedidos(){
+  const v = PEDIDOS.filter(r => r.eh_venda);
+  if (!v.length) return 'sem dado';
+  const d = v.map(r=>r.data).filter(Boolean).sort();
+  return `${dataBR(d[0])} → ${dataBR(d[d.length-1])} · ${brlCurto(soma(v, r=>r.valor_total))}`;
+}
+
 function montarTabela(atual){
   const chaveFn = r => grupoTab === 'dia' ? r.dia
                      : grupoTab === 'campanha' ? (r.campanha || '(sem nome)')
@@ -726,26 +972,39 @@ async function carregar(){
   $('#app').classList.add('hidden');
   try{
     const chaves = Object.keys(CLIENTES);
-    const res = await Promise.all(chaves.map(k =>
-      sbPaginado(CLIENTES[k].view, 'select=*&order=dia.asc')));
+    const [res, peds] = await Promise.all([
+      Promise.all(chaves.map(k => sbPaginado(CLIENTES[k].view, 'select=*&order=dia.asc'))),
+      /* 2.3 mil pedidos passam do corte de 1.000 do PostgREST — sbPaginado resolve.
+         O desempate por pedido_id é obrigatório: ordenar só por data não é
+         determinístico (muitos pedidos no mesmo dia), e entre uma página e a
+         seguinte o banco pode reordenar — o que duplica uma linha na fronteira
+         e faz outra sumir. */
+      sbPaginado('dash_ink_vendas', 'select=*&order=data.asc,pedido_id.asc'),
+    ]);
     chaves.forEach((k, i) => { DADOS[k] = res[i]; });
+    PEDIDOS = peds;
 
-    $('#tab-verum-sub').textContent  = resumoAba(DADOS.verum);
-    $('#tab-mariae-sub').textContent = resumoAba(DADOS.mariae);
+    $('#tab-verum-sub').textContent   = resumoAba(DADOS.verum);
+    $('#tab-mariae-sub').textContent  = resumoAba(DADOS.mariae);
+    $('#tab-pedidos-sub').textContent = resumoPedidos();
 
     /* Limites do seletor de datas cobrem as duas contas, já que o controle é
        compartilhado entre as abas. */
-    const todas = chaves.flatMap(k => DADOS[k].map(r=>r.dia))
-      .filter(Boolean).map(d=>String(d).slice(0,10)).sort();
+    const todas = [
+      ...chaves.flatMap(k => DADOS[k].map(r=>r.dia)),
+      ...PEDIDOS.map(r=>r.data),
+    ].filter(Boolean).map(d=>String(d).slice(0,10)).sort();
     if (todas.length){
       ['#dt-de','#dt-ate'].forEach(s => { const el = $(s); el.min = todas[0]; el.max = todas[todas.length-1]; });
       if (!$('#dt-de').value)  $('#dt-de').value  = todas[0];
       if (!$('#dt-ate').value) $('#dt-ate').value = todas[todas.length-1];
     }
 
-    render();
+    redesenhar();
     $('#loading').classList.add('hidden');
-    $('#app').classList.remove('hidden');
+    /* respeita a aba ativa: um refresh na aba Pedidos não pode voltar para mídia */
+    $('#app').classList.toggle('hidden', aba === 'pedidos');
+    $('#app-pedidos').classList.toggle('hidden', aba !== 'pedidos');
   } catch(e){
     $('#loading').classList.add('hidden');
     $('#erro').textContent = 'Não consegui carregar os dados do Supabase — ' + e.message;
@@ -756,20 +1015,33 @@ async function carregar(){
 /* ======================= EVENTOS ======================= */
 function trocarAba(nova){
   aba = nova;
-  $('#tab-verum').setAttribute('aria-selected', String(nova === 'verum'));
-  $('#tab-mariae').setAttribute('aria-selected', String(nova === 'mariae'));
-  render();
+  ['verum','mariae','pedidos'].forEach(k =>
+    $('#tab-'+k).setAttribute('aria-selected', String(nova === k)));
+
+  /* Pedidos tem painel próprio: a unidade da linha é um pedido, não um dia
+     de anúncio, então não dá para reaproveitar o painel de mídia. */
+  const ehPedidos = nova === 'pedidos';
+  $('#app').classList.toggle('hidden', ehPedidos);
+  $('#app-pedidos').classList.toggle('hidden', !ehPedidos);
+
+  if (ehPedidos) renderPedidos(); else render();
 }
-$('#tab-verum').addEventListener('click', () => trocarAba('verum'));
-$('#tab-mariae').addEventListener('click', () => trocarAba('mariae'));
+['verum','mariae','pedidos'].forEach(k =>
+  $('#tab-'+k).addEventListener('click', () => trocarAba(k)));
+
+$$('.sort-btn[data-pkey]').forEach(b => b.addEventListener('click', () => {
+  const k = b.dataset.pkey;
+  ordPed = { key:k, dir: ordPed.key === k && ordPed.dir === 'desc' ? 'asc' : 'desc' };
+  renderPedidos();
+}));
 
 $$('.seg button').forEach(b => b.addEventListener('click', () => {
   $$('.seg button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
   render();
 }));
-['#dt-de','#dt-ate'].forEach(s => $(s).addEventListener('change', render));
+['#dt-de','#dt-ate'].forEach(s => $(s).addEventListener('change', redesenhar));
 $('#dt-tudo').addEventListener('click', () => {
-  $('#dt-de').value = $('#dt-de').min; $('#dt-ate').value = $('#dt-ate').max; render();
+  $('#dt-de').value = $('#dt-de').min; $('#dt-ate').value = $('#dt-ate').max; redesenhar();
 });
 
 $$('.tabs-mini button').forEach(b => b.addEventListener('click', () => {
@@ -793,7 +1065,7 @@ $('#btn-refresh').addEventListener('click', () => {
 $('#btn-tema').addEventListener('click', () => {
   document.documentElement.classList.toggle('dark');
   try { localStorage.setItem('b16-tema', escuro() ? 'dark' : 'light'); } catch(e){}
-  if (Object.keys(DADOS).length) render();
+  if (Object.keys(DADOS).length) redesenhar();
 });
 try { if (localStorage.getItem('b16-tema') === 'dark') document.documentElement.classList.add('dark'); } catch(e){}
 
