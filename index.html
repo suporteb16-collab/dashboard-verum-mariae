@@ -91,6 +91,22 @@ h2{font-family:"Bebas Neue","DM Sans",sans-serif; font-weight:400; font-size:23p
 .sec-head .hint{font-size:12.5px; color:var(--muted)}
 
 .kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(172px,1fr)); gap:12px}
+
+/* Pódio do top 3 de cupons. Mesmo visual dos .kpi; o 1º lugar herda o
+   tratamento do .kpi.hero para ficar óbvio quem lidera. */
+.podio{display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:12px}
+.podio .pos{background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:15px 16px 14px; box-shadow:var(--shadow)}
+.podio .pos .rank{font-size:11px; letter-spacing:.09em; text-transform:uppercase; color:var(--muted); font-weight:500; margin-bottom:7px; display:block}
+.podio .pos .cup{font-size:20px; font-weight:700; line-height:1.15; letter-spacing:-.01em; color:var(--black); word-break:break-word}
+.podio .pos .fat{font-size:26px; font-weight:700; line-height:1.05; letter-spacing:-.02em; color:var(--black); margin-top:8px}
+.podio .pos .foot{font-size:12.5px; color:var(--muted); margin-top:6px}
+.podio .pos.p1{background:var(--black); border-color:var(--black)}
+.podio .pos.p1 .rank{color:rgba(255,255,255,.6)}
+.podio .pos.p1 .cup,.podio .pos.p1 .fat{color:#fff}
+.podio .pos.p1 .foot{color:rgba(255,255,255,.75)}
+html.dark .podio .pos.p1{background:var(--surface2); border-color:var(--border2)}
+html.dark .podio .pos.p1 .rank,html.dark .podio .pos.p1 .foot{color:var(--muted)}
+html.dark .podio .pos.p1 .cup,html.dark .podio .pos.p1 .fat{color:var(--text)}
 .kpi{background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:15px 16px 14px; box-shadow:var(--shadow)}
 .kpi .lab{font-size:11px; letter-spacing:.09em; text-transform:uppercase; color:var(--muted); font-weight:500; margin-bottom:7px; display:block}
 .kpi .val{font-size:29px; font-weight:700; line-height:1.05; letter-spacing:-.02em; color:var(--black)}
@@ -211,6 +227,9 @@ footer{margin-top:44px; padding-top:16px; border-top:1px solid var(--border); fo
     </button>
     <button role="tab" id="tab-pedidos" aria-selected="false" aria-controls="painel-pedidos">
       Pedidos<span class="tab-sub" id="tab-pedidos-sub">—</span>
+    </button>
+    <button role="tab" id="tab-cupons" aria-selected="false" aria-controls="painel-cupons">
+      Cupons<span class="tab-sub" id="tab-cupons-sub">—</span>
     </button>
   </div>
 
@@ -418,6 +437,44 @@ footer{margin-top:44px; padding-top:16px; border-top:1px solid var(--border); fo
     <footer>
       <span>Agência B16 · Business Intelligence — Henrique Cardoso</span>
       <span id="rodape-ped"></span>
+    </footer>
+  </main>
+
+  <main id="app-cupons" class="hidden">
+    <section style="margin-top:14px">
+      <div class="sec-head"><h2>Ranking de cupons</h2><span class="hint" id="cup-janela"></span></div>
+      <div class="note info"><span class="ic">●</span><div>
+        Mesma regra de venda da aba Pedidos: <b>pago e que não é troca</b>. O código
+        que a INK grava no pedido vem com um sufixo de data (<code>PAPA10-D1787530246</code>);
+        aqui ele é agrupado pelo <b>prefixo</b>, senão a mesma campanha apareceria
+        quebrada em várias linhas. <b>Cupom mede piso, não total</b> — quem compra
+        sem aplicar o código não entra nesta conta.</div></div>
+      <div class="podio" id="cup-podio"></div>
+    </section>
+
+    <section>
+      <div class="sec-head">
+        <h2>Todos os cupons</h2>
+        <span class="hint" id="cup-contagem"></span>
+      </div>
+      <div class="card">
+        <div class="tbl-wrap">
+          <table id="tabela-cupons">
+            <thead><tr>
+              <th class="n" style="width:56px">#</th>
+              <th>Cupom</th>
+              <th class="n"><button class="sort-btn" data-ckey="vendas">Vendas</button></th>
+              <th class="n"><button class="sort-btn" data-ckey="fat">Faturamento</button></th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <span>Agência B16 · Business Intelligence — Henrique Cardoso</span>
+      <span id="rodape-cup"></span>
     </footer>
   </main>
 </div>
@@ -911,10 +968,94 @@ function montarTabelaPedidos(pedidos){
   if (ativo) ativo.setAttribute('data-dir', ordPed.dir);
 }
 
+/* ======================= ABA CUPONS ======================= */
+/* A INK grava o código com um sufixo de data — "PAPA10-D1787530246" e
+   "PAPA10-D1761997509" são a mesma campanha reemitida. Agrupar pelo texto cru
+   quebraria um influencer em várias linhas do ranking, então corta no "-D<dígitos>"
+   final. O sufixo só é removido quando casa esse formato exato: cupom que
+   legitimamente tenha hífen (ex.: "SALE+-D…" vira "SALE+") não é mutilado. */
+const CUP_SUFIXO = /-D\d{6,}$/;
+const normalizarCupom = c => {
+  const s = String(c ?? '').trim().toUpperCase();
+  return s ? s.replace(CUP_SUFIXO, '') : '';
+};
+
+let ordCup = { key:'fat', dir:'desc' };
+
+function rankingCupons(de, ate){
+  /* Só venda confirmada e só pedido com cupom: sem cupom não há a quem atribuir. */
+  const comCupom = PEDIDOS.filter(r =>
+    r.eh_venda && dentro(r.data, de, ate) && normalizarCupom(r.cupom));
+
+  const linhas = [...agrupar(comCupom, r => normalizarCupom(r.cupom)).entries()]
+    .map(([cupom, arr]) => ({ cupom, vendas: arr.length, fat: soma(arr, r => r.valor_total) }));
+
+  /* Desempate por nome mantém a ordem estável entre redesenhos quando dois
+     cupons empatam — sem isso a tabela "pula" a cada mudança de filtro. */
+  const dir = ordCup.dir === 'asc' ? 1 : -1;
+  linhas.sort((a,b) =>
+    (a[ordCup.key] - b[ordCup.key]) * dir || a.cupom.localeCompare(b.cupom,'pt-BR'));
+  return linhas;
+}
+
+function renderCupons(){
+  const datas = PEDIDOS.map(r => r.data).filter(Boolean).sort();
+  const de  = $('#dt-de').value  || datas[0];
+  const ate = $('#dt-ate').value || datas[datas.length-1];
+
+  const linhas = rankingCupons(de, ate);
+
+  $('#cup-janela').textContent = !PEDIDOS.length ? 'sem dado'
+    : linhas.length ? `${dataBR(de)} → ${dataBR(ate)}`
+    : `${dataBR(de)} → ${dataBR(ate)} · nenhuma venda com cupom`;
+
+  /* O pódio é sempre por faturamento, independente de como a tabela está
+     ordenada — é a leitura de "quem gerou mais", e mudar com o sort confundiria. */
+  const top = [...linhas].sort((a,b) => b.fat - a.fat || a.cupom.localeCompare(b.cupom,'pt-BR')).slice(0,3);
+  $('#cup-podio').innerHTML = top.length
+    ? top.map((l,i) => `<div class="pos p${i+1}">
+        <span class="rank">${i+1}º lugar</span>
+        <div class="cup">${esc(l.cupom)}</div>
+        <div class="fat">${brl(l.fat)}</div>
+        <div class="foot">${numBR(l.vendas)} venda(s) · ticket ${nOrDash(div(l.fat, l.vendas), brl)}</div>
+      </div>`).join('')
+    : `<div class="pos"><span class="rank">Top 3</span>
+        <div class="foot" style="margin-top:0">Nenhuma venda com cupom no período.</div></div>`;
+
+  $('#tabela-cupons tbody').innerHTML = linhas.map((l,i) => `<tr>
+      <td class="n">${i+1}</td>
+      <td>${esc(l.cupom)}</td>
+      <td class="n">${numBR(l.vendas)}</td>
+      <td class="n">${brl(l.fat)}</td>
+    </tr>`).join('')
+    || '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:24px">sem venda com cupom no período</td></tr>';
+
+  const totFat = soma(linhas, l => l.fat), totVen = soma(linhas, l => l.vendas);
+  $('#cup-contagem').textContent = linhas.length
+    ? `${numBR(linhas.length)} cupom(ns) · ${numBR(totVen)} venda(s) · ${brl(totFat)}`
+    : '';
+
+  $$('.sort-btn[data-ckey]').forEach(b => b.removeAttribute('data-dir'));
+  const ativo = $(`.sort-btn[data-ckey="${ordCup.key}"]`);
+  if (ativo) ativo.setAttribute('data-dir', ordCup.dir);
+
+  $('#rodape-cup').textContent = PEDIDOS.length
+    ? `Reserva INK · cupom registrado no pedido` : '';
+}
+
+function resumoCupons(){
+  const v = PEDIDOS.filter(r => r.eh_venda && normalizarCupom(r.cupom));
+  if (!v.length) return 'sem dado';
+  const n = new Set(v.map(r => normalizarCupom(r.cupom))).size;
+  return `${numBR(n)} cupons · ${brlCurto(soma(v, r=>r.valor_total))}`;
+}
+
 /* Ponto único de redesenho: o filtro de datas e o tema são compartilhados
    entre as abas, e cada um deles precisa acertar o painel que está visível. */
 function redesenhar(){
-  if (aba === 'pedidos') renderPedidos(); else render();
+  if (aba === 'pedidos') renderPedidos();
+  else if (aba === 'cupons') renderCupons();
+  else render();
 }
 
 function resumoPedidos(){
@@ -987,6 +1128,7 @@ async function carregar(){
     $('#tab-verum-sub').textContent   = resumoAba(DADOS.verum);
     $('#tab-mariae-sub').textContent  = resumoAba(DADOS.mariae);
     $('#tab-pedidos-sub').textContent = resumoPedidos();
+    $('#tab-cupons-sub').textContent  = resumoCupons();
 
     /* Limites do seletor de datas cobrem as duas contas, já que o controle é
        compartilhado entre as abas. */
@@ -1002,9 +1144,10 @@ async function carregar(){
 
     redesenhar();
     $('#loading').classList.add('hidden');
-    /* respeita a aba ativa: um refresh na aba Pedidos não pode voltar para mídia */
-    $('#app').classList.toggle('hidden', aba === 'pedidos');
+    /* respeita a aba ativa: um refresh na aba Pedidos/Cupons não pode voltar para mídia */
+    $('#app').classList.toggle('hidden', aba === 'pedidos' || aba === 'cupons');
     $('#app-pedidos').classList.toggle('hidden', aba !== 'pedidos');
+    $('#app-cupons').classList.toggle('hidden', aba !== 'cupons');
   } catch(e){
     $('#loading').classList.add('hidden');
     $('#erro').textContent = 'Não consegui carregar os dados do Supabase — ' + e.message;
@@ -1015,24 +1158,32 @@ async function carregar(){
 /* ======================= EVENTOS ======================= */
 function trocarAba(nova){
   aba = nova;
-  ['verum','mariae','pedidos'].forEach(k =>
+  ['verum','mariae','pedidos','cupons'].forEach(k =>
     $('#tab-'+k).setAttribute('aria-selected', String(nova === k)));
 
-  /* Pedidos tem painel próprio: a unidade da linha é um pedido, não um dia
-     de anúncio, então não dá para reaproveitar o painel de mídia. */
+  /* Pedidos e Cupons têm painel próprio: a unidade da linha não é um dia de
+     anúncio, então não dá para reaproveitar o painel de mídia. */
   const ehPedidos = nova === 'pedidos';
-  $('#app').classList.toggle('hidden', ehPedidos);
+  const ehCupons  = nova === 'cupons';
+  $('#app').classList.toggle('hidden', ehPedidos || ehCupons);
   $('#app-pedidos').classList.toggle('hidden', !ehPedidos);
+  $('#app-cupons').classList.toggle('hidden', !ehCupons);
 
-  if (ehPedidos) renderPedidos(); else render();
+  redesenhar();
 }
-['verum','mariae','pedidos'].forEach(k =>
+['verum','mariae','pedidos','cupons'].forEach(k =>
   $('#tab-'+k).addEventListener('click', () => trocarAba(k)));
 
 $$('.sort-btn[data-pkey]').forEach(b => b.addEventListener('click', () => {
   const k = b.dataset.pkey;
   ordPed = { key:k, dir: ordPed.key === k && ordPed.dir === 'desc' ? 'asc' : 'desc' };
   renderPedidos();
+}));
+
+$$('.sort-btn[data-ckey]').forEach(b => b.addEventListener('click', () => {
+  const k = b.dataset.ckey;
+  ordCup = { key:k, dir: ordCup.key === k && ordCup.dir === 'desc' ? 'asc' : 'desc' };
+  renderCupons();
 }));
 
 $$('.seg button').forEach(b => b.addEventListener('click', () => {
