@@ -831,8 +831,10 @@ function render(){
   }
   $('#banners').innerHTML = out.join('');
 
-  $('#rodape').textContent = `Fonte: Supabase (Meta Ads via Stract) · conta ${cli.conta} · atualizado `
-    + new Date().toLocaleString('pt-BR');
+  /* Hora da última busca no Supabase, não do redesenho — trocar de aba ou de
+     período não pode fazer o dado parecer mais novo do que é. */
+  $('#rodape').textContent = `Fonte: Supabase (Meta Ads via Stract) · conta ${cli.conta} · buscado em `
+    + (ultimaCarga ? ultimaCarga.toLocaleString('pt-BR') : '—') + ' · atualiza a cada 15 min';
 }
 
 /* ======================= TABELA ======================= */
@@ -1107,10 +1109,23 @@ function resumoAba(dados){
   return `${dataBR(datas[0])} → ${dataBR(datas[datas.length-1])} · ${brlCurto(soma(dados, r=>r.gasto))}`;
 }
 
-async function carregar(){
-  $('#loading').classList.remove('hidden');
-  $('#erro').classList.add('hidden');
-  $('#app').classList.add('hidden');
+/* Atualização automática. A cada INTERVALO_MS o painel busca de novo no Supabase,
+   mas só com a aba do navegador visível: aba em segundo plano não gasta requisição.
+   Ao voltar para a aba, se o dado já passou do intervalo, atualiza na hora.
+   A recarga automática é silenciosa: não esconde o painel nem mostra "Carregando…",
+   e se falhar mantém o último dado na tela em vez de trocar tudo por uma mensagem de erro. */
+const INTERVALO_MS = 15 * 60 * 1000;   // 15 minutos
+let carregando = false;
+let ultimaCarga = null;                 // hora da última busca bem-sucedida
+
+async function carregar({ silencioso = false } = {}){
+  if (carregando) return;               // evita duas buscas sobrepostas (timer + botão)
+  carregando = true;
+  if (!silencioso){
+    $('#loading').classList.remove('hidden');
+    $('#erro').classList.add('hidden');
+    $('#app').classList.add('hidden');
+  }
   try{
     const chaves = Object.keys(CLIENTES);
     const [res, peds] = await Promise.all([
@@ -1137,23 +1152,49 @@ async function carregar(){
       ...PEDIDOS.map(r=>r.data),
     ].filter(Boolean).map(d=>String(d).slice(0,10)).sort();
     if (todas.length){
+      /* Se o "Até" estava no último dia disponível, ele acompanha o dado novo —
+         senão a recarga traria o dia de hoje e o filtro continuaria cortando ele. */
+      const ateEl = $('#dt-ate');
+      if (ateEl.value && ateEl.value === ateEl.max) ateEl.value = todas[todas.length-1];
       ['#dt-de','#dt-ate'].forEach(s => { const el = $(s); el.min = todas[0]; el.max = todas[todas.length-1]; });
       if (!$('#dt-de').value)  $('#dt-de').value  = todas[0];
       if (!$('#dt-ate').value) $('#dt-ate').value = todas[todas.length-1];
     }
 
+    ultimaCarga = new Date();
     redesenhar();
     $('#loading').classList.add('hidden');
+    $('#erro').classList.add('hidden');
     /* respeita a aba ativa: um refresh na aba Pedidos/Cupons não pode voltar para mídia */
     $('#app').classList.toggle('hidden', aba === 'pedidos' || aba === 'cupons');
     $('#app-pedidos').classList.toggle('hidden', aba !== 'pedidos');
     $('#app-cupons').classList.toggle('hidden', aba !== 'cupons');
   } catch(e){
     $('#loading').classList.add('hidden');
-    $('#erro').textContent = 'Não consegui carregar os dados do Supabase — ' + e.message;
-    $('#erro').classList.remove('hidden');
+    if (silencioso && ultimaCarga){
+      /* Falha numa recarga de fundo: o dado anterior continua válido na tela.
+         Tenta de novo no próximo ciclo. */
+      console.warn('Atualização automática falhou:', e.message);
+    } else {
+      $('#erro').textContent = 'Não consegui carregar os dados do Supabase — ' + e.message;
+      $('#erro').classList.remove('hidden');
+    }
+  } finally {
+    carregando = false;
   }
 }
+
+const desatualizado = () => !ultimaCarga || (Date.now() - ultimaCarga.getTime()) >= INTERVALO_MS;
+
+/* Confere a cada minuto em vez de um setInterval de 15 min: assim o relógio conta a
+   partir da última carga (inclusive a do botão) e não dispara duas vezes seguidas. */
+setInterval(() => {
+  if (!document.hidden && desatualizado()) carregar({ silencioso:true });
+}, 60 * 1000);
+
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && desatualizado()) carregar({ silencioso:true });
+});
 
 /* ======================= EVENTOS ======================= */
 function trocarAba(nova){
